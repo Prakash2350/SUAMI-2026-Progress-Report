@@ -212,6 +212,8 @@ for i in range(len(q_vals)):
 
 # ----------------------------------------------------
 # Save director PNG in current MMS folder
+# Note that plt.plot(...) automatically cycles through Matplotlib’s default color list every time you draw a new line,
+# so the lines will have different colors.
 # ----------------------------------------------------
 coords = mesh.coordinates.dat.data_ro
 cells = mesh.coordinates.cell_node_map().values
