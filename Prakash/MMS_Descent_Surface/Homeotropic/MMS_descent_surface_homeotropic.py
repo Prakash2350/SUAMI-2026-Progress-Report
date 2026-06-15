@@ -23,16 +23,14 @@ mesh = UnitSquareMesh(64, 64)
 #
 # Q = [[ q1,  q2],
 #      [ q2, -q1]]
-#
-# So Q is automatically symmetric and traceless.
 # ----------------------------------------------------
 V = VectorFunctionSpace(mesh, "CG", 1, dim=2)
 
-q = Function(V, name="q")          # current iterate q^k
-q_new = Function(V, name="q_new")  # next iterate q^{k+1}
+q = Function(V, name="q")
+q_new = Function(V, name="q_new")
 
-u = TrialFunction(V)               # unknown in each linear solve
-p = TestFunction(V)                # test function
+u = TrialFunction(V)
+p = TestFunction(V)
 
 x, y = SpatialCoordinate(mesh)
 
@@ -51,28 +49,22 @@ a4 = Constant(66.52)
 
 eps = Constant(1.0e-4)
 
+# Homeotropic anchoring
+w0 = Constant(10.0)
+
 
 # ----------------------------------------------------
-# Convert q-vector into Q-tensor
+# Convert q-vector into 2D traceless Q-tensor
 # ----------------------------------------------------
 def Q_tensor(v):
-    v1 = v[0]
-    v2 = v[1]
-
     return as_matrix([
-        [v1,  v2],
-        [v2, -v1]
+        [v[0],  v[1]],
+        [v[1], -v[0]]
     ])
 
 
 # ----------------------------------------------------
 # Exact manufactured solution
-#
-# n = (x - 0.5, y - 0.5) / r
-#
-# Q_exact = s0 (n tensor n - I/2)
-#
-# We add eps to r^2 to avoid singularity at the center.
 # ----------------------------------------------------
 X = x - 0.5
 Y = y - 0.5
@@ -95,11 +87,7 @@ q_exact = as_vector([
 # ----------------------------------------------------
 # Manufactured forcing
 #
-# Strong form:
-#
-# -l1 ΔQ + 1/eta^2 (-a2 Q - a3 Q^2 + a4 |Q|^2 Q) = f
-#
-# We plug Q_exact into the left side to define f.
+# -l1 ΔQ + 1/eta^2 bulk(Q) = f
 # ----------------------------------------------------
 Q_exact_2 = Q_exact * Q_exact
 Qnorm2_exact = inner(Q_exact, Q_exact)
@@ -116,27 +104,18 @@ f_tensor = (
 
 
 # ----------------------------------------------------
-# Boundary condition
-# ----------------------------------------------------
-bc = DirichletBC(V, q_exact, "on_boundary")
-
-
-# ----------------------------------------------------
 # Initial guess
+# No DirichletBC now.
+# Boundary condition is natural Robin from weak form.
 # ----------------------------------------------------
 q.interpolate(as_vector([
     0.05*(x - 0.5),
     0.05*(y - 0.5)
 ]))
 
-bc.apply(q)
-
 
 # ----------------------------------------------------
 # Gradient descent parameters
-#
-# tau is the artificial time step.
-# If the method blows up, decrease tau.
 # ----------------------------------------------------
 tau = Constant(1.0e-5)
 
@@ -145,7 +124,7 @@ tol = 1.0e-10
 
 
 # ----------------------------------------------------
-# Tensor versions of functions
+# Tensor versions
 # ----------------------------------------------------
 Q_trial = Q_tensor(u)
 Q_old = Q_tensor(q)
@@ -166,43 +145,49 @@ bulk_old = (
 
 
 # ----------------------------------------------------
-# Gradient descent weak form
+# Homeotropic Robin boundary data
 #
-# Continuous gradient flow idea:
+# Boundary condition:
 #
-# Q_t = - gradient of energy
+# l1 dQ/dnu + w0 Q = w0 Q_gamma
 #
-# Time discretization:
+# where
 #
-# (Q^{k+1} - Q^k)/tau
-# - l1 ΔQ^{k+1}
-# + nonlinear_bulk(Q^k)
-# = f
+# Q_gamma = s0 (nu tensor nu - I/2)
+# ----------------------------------------------------
+nu = FacetNormal(mesh)
+
+Q_gamma = s0 * (
+    outer(nu, nu) - Identity(2)/2
+)
+
+
+# ----------------------------------------------------
+# Gradient descent weak form with homeotropic anchoring
 #
-# Weak form:
+# No DirichletBC.
 #
-# ((Q^{k+1})/tau, P)
-# + l1 (grad Q^{k+1}, grad P)
+# Boundary term:
 #
+# + w0 (Q^{k+1}, P)_Gamma
 # =
-#
-# ((Q^k)/tau, P)
-# - 1/eta^2 (bulk_old, P)
-# + (f, P)
+# + w0 (Q_gamma, P)_Gamma
 # ----------------------------------------------------
 A = (
     inner(Q_trial / tau, P) * dx
     + l1 * inner(grad(Q_trial), grad(P)) * dx
+    + w0 * inner(Q_trial, P) * ds
 )
 
 L = (
     inner(Q_old / tau, P) * dx
     - (1/eta**2) * inner(bulk_old, P) * dx
     + inner(f_tensor, P) * dx
+    + w0 * inner(Q_gamma, P) * ds
 )
 
 
-problem = LinearVariationalProblem(A, L, q_new, bcs=[bc])
+problem = LinearVariationalProblem(A, L, q_new)
 
 solver = LinearVariationalSolver(
     problem,
@@ -224,7 +209,6 @@ for k in range(max_iter):
     update_norm = sqrt(assemble(inner(q_new - q, q_new - q) * dx))
 
     q.assign(q_new)
-    bc.apply(q)
 
     if k % 100 == 0:
         Q_h = Q_tensor(q)
@@ -269,7 +253,7 @@ max_error = pointwise_error.dat.data_ro.max()
 
 print("Max pointwise error in Q =", max_error)
 
-VTKFile("pointwise_error_gradient_descent.pvd").write(pointwise_error)
+VTKFile("pointwise_error_homeotropic_gradient_descent.pvd").write(pointwise_error)
 
 
 # ----------------------------------------------------
@@ -291,9 +275,6 @@ scalar_order.project(sqrt(2 * inner(Q_h, Q_h)))
 
 # ----------------------------------------------------
 # Director field
-#
-# At each node, compute the eigenvector of Q with
-# largest eigenvalue.
 # ----------------------------------------------------
 W = VectorFunctionSpace(mesh, "CG", 1, dim=3)
 director = Function(W, name="director")
@@ -323,8 +304,6 @@ for i in range(len(q_vals)):
 
 # ----------------------------------------------------
 # Save director line-field PNG
-# Note that plt.plot(...) automatically cycles through Matplotlib’s default color list every time you draw a new line,
-# so the lines will have different colors.
 # ----------------------------------------------------
 coords = mesh.coordinates.dat.data_ro
 cells = mesh.coordinates.cell_node_map().values
@@ -334,7 +313,7 @@ triang = mtri.Triangulation(coords[:, 0], coords[:, 1], cells)
 dvals = director.dat.data_ro
 
 plt.figure(figsize=(6, 6))
-plt.triplot(triang, linewidth=0.2)
+plt.triplot(triang, linewidth=0.2, color="lightgray")
 
 skip = 3
 Lline = 0.012
@@ -350,26 +329,27 @@ for i in range(0, len(coords), skip):
     plt.plot(
         [x0 - Lline*nx, x0 + Lline*nx],
         [y0 - Lline*ny, y0 + Lline*ny],
-        linewidth=0.8
+        linewidth=0.8,
+        color="black"
     )
 
 plt.gca().set_aspect("equal")
 plt.xlabel("x")
 plt.ylabel("y")
-plt.title("Director line field from gradient descent")
+plt.title("Director line field: homeotropic anchoring")
 plt.tight_layout()
-plt.savefig("director_linefield_gradient_descent.png", dpi=300)
+plt.savefig("director_linefield_homeotropic_gradient_descent.png", dpi=300)
 plt.close()
 
-print("Saved director_linefield_gradient_descent.png")
+print("Saved director_linefield_homeotropic_gradient_descent.png")
 
 
 # ----------------------------------------------------
 # Save PVD files
 # ----------------------------------------------------
-VTKFile("q_solution_gradient_descent.pvd").write(q)
-VTKFile("Q_components_gradient_descent.pvd").write(Q00, Q01, Q10, Q11)
-VTKFile("director_gradient_descent.pvd").write(director)
-VTKFile("scalar_order_gradient_descent.pvd").write(scalar_order)
+VTKFile("q_solution_homeotropic_gradient_descent.pvd").write(q)
+VTKFile("Q_components_homeotropic_gradient_descent.pvd").write(Q00, Q01, Q10, Q11)
+VTKFile("director_homeotropic_gradient_descent.pvd").write(director)
+VTKFile("scalar_order_homeotropic_gradient_descent.pvd").write(scalar_order)
 
-print("Saved gradient descent files.")
+print("Saved homeotropic gradient descent files.")
