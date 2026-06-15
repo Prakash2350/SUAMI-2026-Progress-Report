@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">
+<Collection>
+<DataSet timestep="0.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_0.vtu" />
+<DataSet timestep="100.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_1.vtu" />
+<DataSet timestep="200.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_2.vtu" />
+<DataSet timestep="300.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_3.vtu" />
+<DataSet timestep="400.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_4.vtu" />
+<DataSet timestep="500.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_5.vtu" />
+<DataSet timestep="600.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_6.vtu" />
+<DataSet timestep="700.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_7.vtu" />
+<DataSet timestep="800.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_8.vtu" />
+<DataSet timestep="900.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_9.vtu" />
+<DataSet timestep="1000.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_10.vtu" />
+<DataSet timestep="1100.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_11.vtu" />
+<DataSet timestep="1200.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_12.vtu" />
+<DataSet timestep="1300.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_13.vtu" />
+<DataSet timestep="1400.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_14.vtu" />
+<DataSet timestep="1500.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_15.vtu" />
+<DataSet timestep="1544.0" file="director_time_series_gradient_descent/director_time_series_gradient_descent_16.vtu" />
+</Collection>
+</VTKFile>
