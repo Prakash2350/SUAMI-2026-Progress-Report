@@ -1,8 +1,18 @@
 import math
 import numpy as np
+from pathlib import Path
 
 from firedrake import *
 from firedrake.output import VTKFile
+
+
+# ----------------------------------------------------
+# Output directory = directory containing this .py file
+# ----------------------------------------------------
+try:
+    CODE_DIR = Path(__file__).resolve().parent
+except NameError:
+    CODE_DIR = Path.cwd()
 
 
 # ----------------------------------------------------
@@ -44,10 +54,14 @@ a3 = Constant(61.0)
 a4 = Constant(66.52)
 
 eps = Constant(1.0e-4)
-tau = Constant(1.0e-5)
+
+tau_value = 1.0e-5
+tau = Constant(tau_value)
 
 max_iter = 20000
 tol = 1.0e-10
+
+save_every = 100
 
 
 # ----------------------------------------------------
@@ -62,10 +76,6 @@ def Q_tensor(v):
 
 # ----------------------------------------------------
 # Manufactured exact solution
-#
-# Important:
-# Define q_exact first, then Q_exact = Q_tensor(q_exact).
-# This keeps Q_exact strictly traceless even with eps.
 # ----------------------------------------------------
 X = x - 0.5
 Y = y - 0.5
@@ -144,9 +154,73 @@ solver = LinearVariationalSolver(
 
 
 # ----------------------------------------------------
+# Output functions
+# ----------------------------------------------------
+Q00 = Function(S, name="Q00")
+Q01 = Function(S, name="Q01")
+Q10 = Function(S, name="Q10")
+Q11 = Function(S, name="Q11")
+
+W = VectorFunctionSpace(mesh, "CG", 1, dim=3)
+director = Function(W, name="director")
+
+q_out = Function(V, name="q")
+
+Q_file = VTKFile(str(CODE_DIR / "Q_components_gradient_descent_time.pvd"))
+director_file = VTKFile(str(CODE_DIR / "director_gradient_descent_time.pvd"))
+q_file = VTKFile(str(CODE_DIR / "q_gradient_descent_time.pvd"))
+
+
+def update_output_functions():
+    Q_h = Q_tensor(q)
+
+    Q00.project(Q_h[0, 0])
+    Q01.project(Q_h[0, 1])
+    Q10.project(Q_h[1, 0])
+    Q11.project(Q_h[1, 1])
+
+    q_out.assign(q)
+
+    q_vals = q.dat.data_ro
+    d_vals = director.dat.data
+
+    for node in range(len(q_vals)):
+        q1 = q_vals[node, 0]
+        q2 = q_vals[node, 1]
+
+        Qmat = np.array([
+            [q1,  q2],
+            [q2, -q1],
+        ])
+
+        eigvals, eigvecs = np.linalg.eigh(Qmat)
+        n = eigvecs[:, np.argmax(eigvals)]
+
+        d_vals[node, 0] = n[0]
+        d_vals[node, 1] = n[1]
+        d_vals[node, 2] = 0.0
+
+
+def write_frame(k):
+    t = k * tau_value
+
+    update_output_functions()
+
+    Q_file.write(Q00, Q01, Q10, Q11, time=t)
+    director_file.write(director, time=t)
+    q_file.write(q_out, time=t)
+
+
+# ----------------------------------------------------
+# Save initial frame
+# ----------------------------------------------------
+write_frame(0)
+
+
+# ----------------------------------------------------
 # Gradient descent loop
 # ----------------------------------------------------
-for k in range(max_iter):
+for k in range(1, max_iter + 1):
 
     solver.solve()
 
@@ -158,6 +232,9 @@ for k in range(max_iter):
     q.assign(q_new)
     bc.apply(q)
 
+    if k % save_every == 0:
+        write_frame(k)
+
     if k % 100 == 0:
         error_L2 = math.sqrt(float(assemble(
             inner(Q_tensor(q) - Q_exact, Q_tensor(q) - Q_exact) * dx
@@ -165,59 +242,22 @@ for k in range(max_iter):
 
         print(
             f"iter = {k:5d}, "
+            f"time = {k * tau_value:.6e}, "
             f"update = {update_norm:.3e}, "
             f"L2 error = {error_L2:.3e}"
         )
 
     if update_norm < tol:
         print(f"Converged at iter = {k}, update = {update_norm:.3e}")
+        write_frame(k)
         break
 
 
-# ----------------------------------------------------
-# Save Q components
-# ----------------------------------------------------
-Q_h = Q_tensor(q)
-
-Q00 = Function(S, name="Q00")
-Q01 = Function(S, name="Q01")
-Q10 = Function(S, name="Q10")
-Q11 = Function(S, name="Q11")
-
-Q00.project(Q_h[0, 0])
-Q01.project(Q_h[0, 1])
-Q10.project(Q_h[1, 0])
-Q11.project(Q_h[1, 1])
-
-VTKFile("Q_components_gradient_descent.pvd").write(Q00, Q01, Q10, Q11)
-
-
-# ----------------------------------------------------
-# Save director field
-# ----------------------------------------------------
-W = VectorFunctionSpace(mesh, "CG", 1, dim=3)
-director = Function(W, name="director")
-
-q_vals = q.dat.data_ro
-d_vals = director.dat.data
-
-for node in range(len(q_vals)):
-
-    q1 = q_vals[node, 0]
-    q2 = q_vals[node, 1]
-
-    Qmat = np.array([
-        [q1,  q2],
-        [q2, -q1],
-    ])
-
-    eigvals, eigvecs = np.linalg.eigh(Qmat)
-    n = eigvecs[:, np.argmax(eigvals)]
-
-    d_vals[node, 0] = n[0]
-    d_vals[node, 1] = n[1]
-    d_vals[node, 2] = 0.0
-
-VTKFile("director_gradient_descent.pvd").write(director)
-
-print("Saved Q_components_gradient_descent.pvd and director_gradient_descent.pvd")
+print(
+    "Saved in:\n"
+    f"  {CODE_DIR}\n\n"
+    "Files:\n"
+    "  Q_components_gradient_descent_time.pvd\n"
+    "  director_gradient_descent_time.pvd\n"
+    "  q_gradient_descent_time.pvd"
+)
