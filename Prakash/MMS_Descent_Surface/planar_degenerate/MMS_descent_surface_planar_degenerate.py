@@ -47,7 +47,7 @@ a2 = Constant(7.5)
 a3 = Constant(61.0)
 a4 = Constant(66.52)
 
-eps = Constant(1.0e-4)
+eps = Constant(1.0e-5)
 
 # Surface parameters
 w0 = Constant(0.0)
@@ -205,7 +205,7 @@ surface_cubic_old = (
 # ----------------------------------------------------
 # Gradient descent weak form with manufactured surface term
 #
-# Steady problem:
+# Weak form of PDE:
 #
 # l1 (grad Q, grad P)
 # + w0 (Q, P)_Gamma
@@ -217,7 +217,7 @@ surface_cubic_old = (
 #
 # Gradient descent:
 #
-# (Q^{k+1} - Q^k)/tau + steady residual = 0
+# (Q^{k+1} - Q^k)/tau  = - weak form of PDE at Q^k
 #
 # We treat:
 #   l1 term implicitly
