@@ -41,7 +41,7 @@ x, y = SpatialCoordinate(mesh)
 s0 = Constant(0.7)
 
 l1 = Constant(1.0)
-eta = Constant(0.1)
+eta = Constant(1)
 
 a2 = Constant(7.5)
 a3 = Constant(61.0)
@@ -120,10 +120,10 @@ q.interpolate(as_vector([
 # ----------------------------------------------------
 # Gradient descent parameters
 # ----------------------------------------------------
-tau = Constant(1.0e-5)
+tau = Constant(1.0e-4)
 
-max_iter = 20000
-tol = 1.0e-10
+max_iter = 10000
+tol = 1.0e-5
 
 
 # ----------------------------------------------------
