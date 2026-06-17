@@ -165,7 +165,7 @@ q.interpolate(as_vector([
 tau = Constant(1.0e-4)
 
 max_iter = 10000
-tol = 1.0e-5
+tol = 1.0e-8
 
 
 # ----------------------------------------------------
