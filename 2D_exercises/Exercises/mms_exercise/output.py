@@ -13,6 +13,16 @@ def case_vtk_dir(exact_case_name):
     return case_output_dir(exact_case_name) / "vtk"
 
 
+def rows_by_exact_case(rows):
+    return [
+        (
+            exact_case_name,
+            [row for row in rows if row["exact_case"] == exact_case_name],
+        )
+        for exact_case_name in sorted({row["exact_case"] for row in rows})
+    ]
+
+
 def make_vtk_file(mode_name, anchoring, N, exact_case_name=None, save_vtk=True):
     if not save_vtk:
         return None, None
@@ -30,8 +40,12 @@ def make_vtk_file(mode_name, anchoring, N, exact_case_name=None, save_vtk=True):
     return VTKFile(str(vtk_path)), vtk_path
 
 
-def write_vtk_frame(vtk_file, q_func, q_exact_fn, q_error, time_value=0.0):
+def write_vtk_frame(vtk_file, q_func, q_exact_fn=None, q_error=None, time_value=0.0):
     if vtk_file is None:
+        return
+
+    if q_exact_fn is None or q_error is None:
+        vtk_file.write(q_func, time=time_value)
         return
 
     q_error.interpolate(q_func - q_exact_fn)
@@ -41,13 +55,8 @@ def write_vtk_frame(vtk_file, q_func, q_exact_fn, q_error, time_value=0.0):
 def write_direct_errors(rows):
     config.OUT_DIR.mkdir(parents=True, exist_ok=True)
     csv_paths = []
-    exact_cases = sorted({row["exact_case"] for row in rows})
 
-    for exact_case_name in exact_cases:
-        case_rows = [
-            row for row in rows
-            if row["exact_case"] == exact_case_name
-        ]
+    for exact_case_name, case_rows in rows_by_exact_case(rows):
         out_dir = case_output_dir(exact_case_name)
         out_dir.mkdir(parents=True, exist_ok=True)
         csv_path = out_dir / "direct_errors.csv"
@@ -83,13 +92,8 @@ def write_direct_errors(rows):
 def write_gradient_comparison(rows):
     config.OUT_DIR.mkdir(parents=True, exist_ok=True)
     csv_paths = []
-    exact_cases = sorted({row["exact_case"] for row in rows})
 
-    for exact_case_name in exact_cases:
-        case_rows = [
-            row for row in rows
-            if row["exact_case"] == exact_case_name
-        ]
+    for exact_case_name, case_rows in rows_by_exact_case(rows):
         out_dir = case_output_dir(exact_case_name)
         out_dir.mkdir(parents=True, exist_ok=True)
         csv_path = out_dir / "gradient_comparison.csv"
@@ -122,6 +126,41 @@ def write_gradient_comparison(rows):
                     update_history[-1] if update_history else "",
                     row["vtk_path"] or "",
                 ])
+
+        csv_paths.append(csv_path)
+
+    return csv_paths
+
+
+def write_actual_comparison(rows):
+    config.OUT_DIR.mkdir(parents=True, exist_ok=True)
+    csv_paths = []
+
+    for row in rows:
+        out_dir = case_output_dir(row["exact_case"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = out_dir / "actual_comparison.csv"
+        energy_history = row["energy_history"]
+        update_history = row["update_history"]
+
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "anchoring",
+                "N",
+                "h",
+                "final_energy",
+                "final_update",
+                "vtk_path",
+            ])
+            writer.writerow([
+                row["anchoring"],
+                row["N"],
+                row["h"],
+                energy_history[-1] if energy_history else "",
+                update_history[-1] if update_history else "",
+                row["vtk_path"] or "",
+            ])
 
         csv_paths.append(csv_path)
 

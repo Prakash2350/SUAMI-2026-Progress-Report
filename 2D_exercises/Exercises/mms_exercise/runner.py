@@ -1,5 +1,8 @@
+import time
+
 from . import config
 from .output import (
+    write_actual_comparison,
     write_direct_errors,
     write_energy_history,
     write_gradient_comparison,
@@ -23,6 +26,7 @@ def run_direct_convergence(save_vtk=True):
                     mode="direct",
                     save_vtk=save_vtk,
                     exact_case_name=exact_case_name,
+                    problem_mode="mms",
                 )
                 rows.append(result)
 
@@ -52,6 +56,7 @@ def run_gradient_flows(save_vtk=True):
                 mode="gradient",
                 save_vtk=save_vtk,
                 exact_case_name=exact_case_name,
+                problem_mode="mms",
             )
             results.append(result)
 
@@ -86,10 +91,57 @@ def run_gradient_flows(save_vtk=True):
     return results
 
 
+def run_actual_gradient_flows(save_vtk=True):
+    config.OUT_DIR.mkdir(parents=True, exist_ok=True)
+    results = []
+
+    for anchoring in ["homeotropic", "planar"]:
+        print(f"\nActual gradient flow: {anchoring}")
+        start_time = time.perf_counter()
+
+        result = solve_one_mesh(
+            config.gradient_N,
+            anchoring,
+            mode="gradient",
+            save_vtk=save_vtk,
+            problem_mode="actual",
+        )
+        results.append(result)
+
+        write_energy_history(
+            result["exact_case"],
+            anchoring,
+            result["energy_history"],
+        )
+        plot_energy_history(
+            result["exact_case"],
+            anchoring,
+            result["energy_history"],
+        )
+
+        energies = result["energy_history"]
+        updates = result["update_history"]
+        elapsed = time.perf_counter() - start_time
+        print(
+            f"[actual, {anchoring}] "
+            f"final energy={energies[-1]:.12e}, "
+            f"final update={updates[-1] if updates else 0.0:.3e}, "
+            f"elapsed={elapsed:.2f}s"
+        )
+
+    write_actual_comparison(results)
+    return results
+
+
 def main():
-    direct_rows = run_direct_convergence(save_vtk=False)
-    plot_direct_errors(direct_rows)
-    run_gradient_flows(save_vtk=True)
+    if config.problem_mode == "actual":
+        run_actual_gradient_flows(save_vtk=True)
+    elif config.problem_mode == "mms":
+        direct_rows = run_direct_convergence(save_vtk=False)
+        plot_direct_errors(direct_rows)
+        run_gradient_flows(save_vtk=True)
+    else:
+        raise ValueError("problem_mode must be 'actual' or 'mms'")
 
     print(
         "\nSaved results in:\n"

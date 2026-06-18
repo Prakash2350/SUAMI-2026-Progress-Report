@@ -11,6 +11,7 @@ from . import config
 class MMSProblem:
     N: int
     anchoring: str
+    problem_mode: str
     exact_case_name: str
     mesh: Any
     V: Any
@@ -37,18 +38,28 @@ class MMSProblem:
         return 1.0 / self.N
 
 
-def build_problem(N, anchoring, exact_case_name="radial"):
+def build_problem(N, anchoring, exact_case_name=None, problem_mode=None):
     if anchoring not in {"homeotropic", "planar"}:
         raise ValueError("anchoring must be 'homeotropic' or 'planar'")
 
-    if exact_case_name not in config.Q_EXACT_CASES:
+    problem_mode = problem_mode or config.problem_mode
+    if problem_mode not in {"mms", "actual"}:
+        raise ValueError("problem_mode must be 'mms' or 'actual'")
+
+    if problem_mode == "mms" and exact_case_name is None:
+        exact_case_name = next(iter(config.Q_EXACT_CASES))
+    elif problem_mode == "actual":
+        exact_case_name = f"actual_{anchoring}"
+
+    if problem_mode == "mms" and exact_case_name not in config.Q_EXACT_CASES:
         available = ", ".join(config.Q_EXACT_CASES)
         raise ValueError(
             f"unknown exact_case_name {exact_case_name!r}; "
             f"available cases: {available}"
         )
 
-    mesh = UnitSquareMesh(N, N)
+    #mesh = UnitSquareMesh(N,N)
+    mesh = UnitDiskMesh(3)
 
     V = VectorFunctionSpace(mesh, "CG", 1, dim=2)
     q = Function(V, name="q")
@@ -84,6 +95,27 @@ def build_problem(N, anchoring, exact_case_name="radial"):
             [v[0], v[1]],
             [v[1], -v[0]],
         ])
+
+    def zero_Q_tensor():
+        return as_tensor([
+            [0.0, 0.0],
+            [0.0, 0.0],
+        ])
+
+    def bulk_term(Q):
+        return (
+            -a2 * Q
+            - a3 * dot(Q, Q)
+            + a4 * inner(Q, Q) * Q
+        )
+
+    def safe_derivative(build_derivative):
+        try:
+            return build_derivative()
+        except ValueError as exc:
+            if "Cannot determine geometric dimension" not in str(exc):
+                raise
+            return zero_Q_tensor()
 
     def Q_tilde(Q):
         return Q + (s0 / 2.0) * I2
@@ -124,60 +156,56 @@ def build_problem(N, anchoring, exact_case_name="radial"):
             + (w2 / (4.0 * omega)) * (inner(Qt, Qt) - s0**2) ** 2
         )
 
-    Q_exact = config.Q_EXACT_CASES[exact_case_name](x, y, s0, eps)
-    q_exact = as_vector([Q_exact[0, 0], Q_exact[0, 1]])
+    if problem_mode == "mms":
+        Q_exact = config.Q_EXACT_CASES[exact_case_name](x, y, s0, eps)
+        q_exact = as_vector([Q_exact[0, 0], Q_exact[0, 1]])
 
-    zero_tensor = as_tensor([
-        [0.0, 0.0],
-        [0.0, 0.0],
-    ])
-
-    def use_zero_if_constant_derivative(build_derivative):
-        try:
-            return build_derivative()
-        except ValueError as exc:
-            if "Cannot determine geometric dimension" not in str(exc):
-                raise
-            return zero_tensor
-
-    bulk_exact = (
-        -a2 * Q_exact
-        - a3 * dot(Q_exact, Q_exact)
-        + a4 * inner(Q_exact, Q_exact) * Q_exact
-    )
-
-    laplace_Q_exact = use_zero_if_constant_derivative(
-        lambda: div(grad(Q_exact))
-    )
-
-    f_tensor = (
-        -l1 * laplace_Q_exact
-        + (1.0 / eta**2) * bulk_exact
-    )
-
-    ii, jj, kk = indices(3)
-    dQdn_exact = use_zero_if_constant_derivative(
-        lambda: as_tensor(
-            Q_exact[ii, jj].dx(kk) * normal[kk],
-            (ii, jj),
+        bulk_exact = bulk_term(Q_exact)
+        laplace_Q_exact = safe_derivative(lambda: div(grad(Q_exact)))
+        f_tensor = (
+            -l1 * laplace_Q_exact
+            + (1.0 / eta**2) * bulk_exact
         )
-    )
-    boundary_rhs = l1 * dQdn_exact + surface_grad(Q_exact)
 
-    q_exact_fn = Function(V, name="q_exact")
-    q_exact_fn.interpolate(q_exact)
-    q_error = Function(V, name="q_error")
+        ii, jj, kk = indices(3)
+        dQdn_exact = safe_derivative(
+            lambda: as_tensor(
+                Q_exact[ii, jj].dx(kk) * normal[kk],
+                (ii, jj),
+            )
+        )
+        boundary_rhs = l1 * dQdn_exact + surface_grad(Q_exact)
+
+        q_exact_fn = Function(V, name="q_exact")
+        q_exact_fn.interpolate(q_exact)
+        q_error = Function(V, name="q_error")
+    else:
+        Q_exact = None
+        q_exact = None
+        q_exact_fn = None
+        q_error = None
+        f_tensor = zero_Q_tensor()
+        boundary_rhs = zero_Q_tensor()
 
     def energy_form(Q):
-        return (
+        energy = (
             0.5 * l1 * inner(grad(Q), grad(Q)) * dx
             + bulk_energy_density(Q) * dx
-            - inner(f_tensor, Q) * dx
             + surface_energy_density(Q) * ds
-            - inner(boundary_rhs, Q) * ds
         )
 
+        if problem_mode == "mms":
+            energy += (
+                -inner(f_tensor, Q) * dx
+                - inner(boundary_rhs, Q) * ds
+            )
+
+        return energy
+
     def compute_errors(q_func):
+        if Q_exact is None:
+            return None, None
+
         Q_num = Q_tensor(q_func)
         Q_err = Q_num - Q_exact
 
@@ -195,6 +223,7 @@ def build_problem(N, anchoring, exact_case_name="radial"):
     return MMSProblem(
         N=N,
         anchoring=anchoring,
+        problem_mode=problem_mode,
         exact_case_name=exact_case_name,
         mesh=mesh,
         V=V,

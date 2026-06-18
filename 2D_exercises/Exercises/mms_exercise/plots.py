@@ -4,24 +4,21 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from . import config
-from .output import case_output_dir
+from .output import case_output_dir, rows_by_exact_case
 
 
 def plot_direct_errors(rows):
     config.OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    exact_cases = sorted({row["exact_case"] for row in rows})
-
-    for exact_case_name in exact_cases:
+    for exact_case_name, case_rows in rows_by_exact_case(rows):
         out_dir = case_output_dir(exact_case_name)
         out_dir.mkdir(parents=True, exist_ok=True)
 
         for anchoring in ["homeotropic", "planar"]:
             data = [
                 row
-                for row in rows
-                if row["exact_case"] == exact_case_name
-                and row["anchoring"] == anchoring
+                for row in case_rows
+                if row["anchoring"] == anchoring
             ]
 
             hs = [row["h"] for row in data]

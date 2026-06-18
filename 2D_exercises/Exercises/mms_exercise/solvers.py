@@ -12,9 +12,10 @@ def solve_one_mesh(
     anchoring,
     mode="direct",
     save_vtk=True,
-    exact_case_name="radial",
+    exact_case_name=None,
+    problem_mode=None,
 ):
-    problem = build_problem(N, anchoring, exact_case_name)
+    problem = build_problem(N, anchoring, exact_case_name, problem_mode)
 
     if mode == "direct":
         return _solve_direct(problem, save_vtk)
@@ -40,9 +41,10 @@ def _result(problem, L2_err, H1_err, vtk_path, energy_history=None, update_histo
 
 
 def _solve_direct(problem, save_vtk):
+    Q_tensor = problem.Q_tensor
     q = problem.q
-    Q = problem.Q_tensor(q)
-    P = problem.Q_tensor(problem.p)
+    Q = Q_tensor(q)
+    P = Q_tensor(problem.p)
 
     bulk_Q = (
         -problem.a2 * Q
@@ -53,12 +55,20 @@ def _solve_direct(problem, save_vtk):
     F_direct = (
         problem.l1 * inner(grad(Q), grad(P)) * dx
         + (1.0 / problem.eta**2) * inner(bulk_Q, P) * dx
-        - inner(problem.f_tensor, P) * dx
-        + inner(problem.surface_grad(Q) - problem.boundary_rhs, P) * ds
+        + inner(problem.surface_grad(Q), P) * ds
     )
 
-    # Start near the manufactured solution so Newton selects the MMS branch.
-    q.interpolate(problem.q_exact)
+    if problem.problem_mode == "mms":
+        F_direct += (
+            -inner(problem.f_tensor, P) * dx
+            - inner(problem.boundary_rhs, P) * ds
+        )
+
+    if problem.problem_mode == "mms":
+        # Start near the manufactured solution so Newton selects the MMS branch.
+        q.interpolate(problem.q_exact)
+    else:
+        q.assign(0.0)
 
     solve(
         F_direct == 0,
@@ -85,6 +95,7 @@ def _solve_direct(problem, save_vtk):
 
 
 def _solve_gradient(problem, save_vtk):
+    Q_tensor = problem.Q_tensor
     time_step = Constant(config.gradient_time_step_value)
 
     q_old = Function(problem.V, name="q")
@@ -93,9 +104,9 @@ def _solve_gradient(problem, save_vtk):
     q_old.assign(0.0)
     q_new.assign(q_old)
 
-    Q_old = problem.Q_tensor(q_old)
-    Q_new = problem.Q_tensor(q_new)
-    P = problem.Q_tensor(problem.p)
+    Q_old = Q_tensor(q_old)
+    Q_new = Q_tensor(q_new)
+    P = Q_tensor(problem.p)
 
     bulk_new = (
         -problem.a2 * Q_new
@@ -107,9 +118,14 @@ def _solve_gradient(problem, save_vtk):
         inner((Q_new - Q_old) / time_step, P) * dx
         + problem.l1 * inner(grad(Q_new), grad(P)) * dx
         + (1.0 / problem.eta**2) * inner(bulk_new, P) * dx
-        - inner(problem.f_tensor, P) * dx
-        + inner(problem.surface_grad(Q_new) - problem.boundary_rhs, P) * ds
+        + inner(problem.surface_grad(Q_new), P) * ds
     )
+
+    if problem.problem_mode == "mms":
+        F_gd += (
+            -inner(problem.f_tensor, P) * dx
+            - inner(problem.boundary_rhs, P) * ds
+        )
 
     vtk_file, vtk_path = make_vtk_file(
         "gradient",
@@ -141,14 +157,12 @@ def _solve_gradient(problem, save_vtk):
             solver_parameters=config.GRADIENT_SOLVER_PARAMETERS.copy(),
         )
 
-        update_norm = math.sqrt(float(assemble(
-            inner(problem.Q_tensor(q_new) - problem.Q_tensor(q_old),
-                  problem.Q_tensor(q_new) - problem.Q_tensor(q_old)) * dx
-        )))
+        Q_update = Q_tensor(q_new) - Q_tensor(q_old)
+        update_norm = math.sqrt(float(assemble(inner(Q_update, Q_update) * dx)))
 
         q_old.assign(q_new)
 
-        energy_value = float(assemble(problem.energy_form(problem.Q_tensor(q_old))))
+        energy_value = float(assemble(problem.energy_form(Q_tensor(q_old))))
         energy_history.append(energy_value)
         update_history.append(update_norm)
 
@@ -161,7 +175,7 @@ def _solve_gradient(problem, save_vtk):
                 time_value=k * config.gradient_time_step_value,
             )
 
-        if k % 50 == 0:
+        if k % 50 == 0 and problem.problem_mode == "mms":
             L2_err, H1_err = problem.compute_errors(q_old)
             print(
                 f"[{problem.anchoring}] iter={k:5d}, "
@@ -169,6 +183,12 @@ def _solve_gradient(problem, save_vtk):
                 f"update={update_norm:.3e}, "
                 f"L2={L2_err:.3e}, "
                 f"H1={H1_err:.3e}"
+            )
+        elif k % 50 == 0:
+            print(
+                f"[{problem.anchoring}] iter={k:5d}, "
+                f"energy={energy_value:.12e}, "
+                f"update={update_norm:.3e}"
             )
 
         if update_norm < config.gradient_tol:
