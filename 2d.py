@@ -54,11 +54,6 @@ bc = DirichletBC(V, Q_exact, "on_boundary")
 Q.interpolate(Q_exact)
 
 
-
-# bc_matrix = Constant(((-0.5, 0.6), (0.6, 0.5)))
-# bc = DirichletBC(V, bc_matrix, "on_boundary")
-
-
 solve(F == 0, Q, bcs=bc)
 error_L2 = errornorm(Q_exact, Q, norm_type="L2")
 print(error_L2)
