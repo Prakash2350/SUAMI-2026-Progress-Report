@@ -1,0 +1,3 @@
+exact_case,anchoring,N,h,L2,H1,final_energy,final_update,vtk_path
+cos_pi_x,homeotropic,5,0.2,0.1493768703347304,1.212627292315699,-5.773288607649107,7.697538652590651e-05,/data/siruilia/LC/SUAMI-2026-Progress-Report/2D_exercises/Exercises/mms_results/cos_pi_x/vtk/gradient_homeotropic_N5.pvd
+cos_pi_x,planar,5,0.2,0.14304289386221655,1.245704743733805,-8.799508916492025,7.418595454118906e-05,/data/siruilia/LC/SUAMI-2026-Progress-Report/2D_exercises/Exercises/mms_results/cos_pi_x/vtk/gradient_planar_N5.pvd
