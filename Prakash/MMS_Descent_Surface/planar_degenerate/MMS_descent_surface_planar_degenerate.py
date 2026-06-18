@@ -41,7 +41,7 @@ x, y = SpatialCoordinate(mesh)
 s0 = Constant(0.7)
 
 l1 = Constant(1.0)
-eta = Constant(1.0)
+eta = Constant(0.1)
 
 a2 = Constant(7.5)
 a3 = Constant(61.0)
@@ -50,9 +50,16 @@ a4 = Constant(66.52)
 eps = Constant(1.0e-5)
 
 # Surface parameters
+# For planar degenrate anchoring
 w0 = Constant(0.0)
 w1 = Constant(10.0)
 w2 = Constant(10.0)
+
+# For Homeotropic anchoring
+# w0 = Constant(10.0)
+# w1 = Constant(0.0)
+# w2 = Constant(0.0)
+
 omega = Constant(0.1)
 
 
