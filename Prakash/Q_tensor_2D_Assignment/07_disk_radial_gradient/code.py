@@ -15,9 +15,8 @@ from firedrake.output import VTKFile
 # ----------------------------------------------------
 # Choices
 # ----------------------------------------------------
-mesh_sizes = [16, 32, 64, 128]
+mesh_sizes = [2,4]
 
-# Choose one
 anchoring_type = "planar"
 # anchoring_type = "homeotropic"
 
@@ -38,9 +37,9 @@ a4 = Constant(66.52)
 
 omega = Constant(0.1)
 
-tau = Constant(1.0e-4)
-max_iter = 10000
-tol = 1.0e-8
+tau = Constant(5.0e-4)
+max_iter = 3000
+tol = 1.0e-7
 
 if anchoring_type == "planar":
     w0 = Constant(0.0)
@@ -75,7 +74,6 @@ def save_director_png(mesh, q, filename):
     d_vals = director.dat.data
 
     for i in range(len(q_vals)):
-
         q1 = q_vals[i, 0]
         q2 = q_vals[i, 1]
 
@@ -103,7 +101,6 @@ def save_director_png(mesh, q, filename):
     Lline = 0.35 / np.sqrt(len(coords))
 
     for i in range(0, len(coords), skip):
-
         x0 = coords[i, 0]
         y0 = coords[i, 1]
 
@@ -131,12 +128,12 @@ def save_director_png(mesh, q, filename):
 # ----------------------------------------------------
 def run_one_mesh(N):
 
-    print(f"\nRunning N = {N}, anchoring = {anchoring_type}")
+    print(f"\nRunning disk mesh N = {N}, anchoring = {anchoring_type}")
 
-    folder = OUTDIR / f"gradient_descent_{anchoring_type}_N{N}"
+    folder = OUTDIR / f"disk_gradient_descent_{anchoring_type}_N{N}"
     folder.mkdir(parents=True, exist_ok=True)
 
-    mesh = UnitSquareMesh(N, N)
+    mesh = UnitDiskMesh(N)
 
     V = VectorFunctionSpace(mesh, "CG", 1, dim=2)
     S = FunctionSpace(mesh, "CG", 1)
@@ -153,32 +150,21 @@ def run_one_mesh(N):
     Pi = I - outer(nu, nu)
 
     # ------------------------------------------------
-    # Type your director field here.
+    # New exact director on disk:
     #
-    # For this file: n = (1, 0)
+    # n_exact = (x,y)/sqrt(x^2+y^2)
+    #
+    # Regularized to avoid singularity at origin.
     # ------------------------------------------------
-    eps = Constant(1.0e-4)
-    nx_raw = 1.0 + eps * x + eps * y
-    ny_raw = 0.0 + eps * x + eps * y
-    eps = Constant(0.0)
+    eps_reg = Constant(1.0e-3)
 
-    # Examples for later:
-    #nx_raw = cos(pi*x)
-    #ny_raw = sin(pi*x)
-    #eps = Constant(0.0)
+    r = sqrt(x**2 + y**2 + eps_reg**2)
 
-    # nx_raw = x - 0.5
-    # ny_raw = y - 0.5
-    # eps = Constant(1.0e-5)
-
-    length = sqrt(nx_raw**2 + ny_raw**2 + eps)
-
-    nx = nx_raw / length
-    ny = ny_raw / length
+    nx = x / r
+    ny = y / r
 
     # ------------------------------------------------
-    # Automatically compute Q_exact from n
-    # Q = s0(n tensor n - I/2)
+    # Q_exact = s0(n tensor n - I/2)
     # ------------------------------------------------
     Q_exact = s0 * (
         as_matrix([
@@ -195,7 +181,6 @@ def run_one_mesh(N):
 
     # ------------------------------------------------
     # Manufactured volume force
-    # -l1 Delta Q + bulk(Q) = f
     # ------------------------------------------------
     Q_exact_2 = Q_exact * Q_exact
     Qnorm2_exact = inner(Q_exact, Q_exact)
@@ -229,10 +214,11 @@ def run_one_mesh(N):
 
     # ------------------------------------------------
     # Initial guess
+    # Use exact guess to avoid slow lagging.
     # ------------------------------------------------
     q.interpolate(as_vector([
-        0,
-        0
+        0.05*(x - 0.5),
+        0.05*(y - 0.5)
     ]))
 
     # ------------------------------------------------
@@ -366,7 +352,7 @@ def run_one_mesh(N):
     print("H1 error =", error_H1)
 
     # ------------------------------------------------
-    # Save Q tensor components only
+    # Save Q tensor components
     # ------------------------------------------------
     Q00 = Function(S, name="Q_00")
     Q01 = Function(S, name="Q_01")
@@ -381,12 +367,27 @@ def run_one_mesh(N):
     VTKFile(str(folder / "Q_tensor.pvd")).write(Q00, Q01, Q10, Q11)
 
     # ------------------------------------------------
-    # Save director PNG only
+    # Save exact Q also
+    # ------------------------------------------------
+    Qe00 = Function(S, name="Q_exact_00")
+    Qe01 = Function(S, name="Q_exact_01")
+    Qe10 = Function(S, name="Q_exact_10")
+    Qe11 = Function(S, name="Q_exact_11")
+
+    Qe00.project(Q_exact[0, 0])
+    Qe01.project(Q_exact[0, 1])
+    Qe10.project(Q_exact[1, 0])
+    Qe11.project(Q_exact[1, 1])
+
+    VTKFile(str(folder / "Q_exact.pvd")).write(Qe00, Qe01, Qe10, Qe11)
+
+    # ------------------------------------------------
+    # Save director PNG
     # ------------------------------------------------
     save_director_png(mesh, q, folder / "director.png")
 
     # ------------------------------------------------
-    # Save energy CSV and energy plot
+    # Save energy CSV and plot
     # ------------------------------------------------
     energy_csv = folder / "energy_history.csv"
 
@@ -426,9 +427,9 @@ for N in mesh_sizes:
 
 
 # ----------------------------------------------------
-# Save CSV
+# Save convergence CSV
 # ----------------------------------------------------
-csv_name = OUTDIR / f"gradient_descent_convergence_errors_{anchoring_type}.csv"
+csv_name = OUTDIR / f"disk_gradient_descent_convergence_errors_{anchoring_type}.csv"
 
 with open(csv_name, "w", newline="") as file:
     writer = csv.writer(file)
@@ -452,10 +453,10 @@ plt.loglog(hs, L2s, "o-")
 plt.gca().invert_xaxis()
 plt.xlabel("h")
 plt.ylabel("L2 error")
-plt.title("L2 error vs h")
+plt.title("Disk MMS: L2 error vs h")
 plt.grid(True, which="both")
 plt.tight_layout()
-plt.savefig(OUTDIR / f"gradient_descent_L2_error_vs_h_{anchoring_type}.png", dpi=300)
+plt.savefig(OUTDIR / f"disk_gradient_descent_L2_error_vs_h_{anchoring_type}.png", dpi=300)
 plt.close()
 
 plt.figure()
@@ -463,10 +464,10 @@ plt.loglog(hs, H1s, "o-")
 plt.gca().invert_xaxis()
 plt.xlabel("h")
 plt.ylabel("H1 error")
-plt.title("H1 error vs h")
+plt.title("Disk MMS: H1 error vs h")
 plt.grid(True, which="both")
 plt.tight_layout()
-plt.savefig(OUTDIR / f"gradient_descent_H1_error_vs_h_{anchoring_type}.png", dpi=300)
+plt.savefig(OUTDIR / f"disk_gradient_descent_H1_error_vs_h_{anchoring_type}.png", dpi=300)
 plt.close()
 
 print("Done.")
