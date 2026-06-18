@@ -150,23 +150,20 @@ def run_one_mesh(N):
     #
     # For this file: n = (1, 0)
     # ------------------------------------------------
-   
+    eps = Constant(0.0)
 
-    eps = Constant(1.0e-4)
-    nx_raw = 1.0 + eps * x + eps * y
-    ny_raw = 0.0 + eps * x + eps * y
-
+    #nx_raw = 1.0 + 0*x
+    #ny_raw = 0.0 + 0*x
 
     # Examples for later:
     #nx_raw = cos(pi*x)
     #ny_raw = sin(pi*x)
 
+    nx_raw = x - 0.5
+    ny_raw = y - 0.5
+    eps = Constant(1.0e-5)
 
-    #nx_raw = x - 0.5
-    #ny_raw = y - 0.5
-    #eps = Constant(1.0e-5)
-
-    length = sqrt(nx_raw**2 + ny_raw**2)
+    length = sqrt(nx_raw**2 + ny_raw**2 + eps)
 
     nx = nx_raw / length
     ny = ny_raw / length
