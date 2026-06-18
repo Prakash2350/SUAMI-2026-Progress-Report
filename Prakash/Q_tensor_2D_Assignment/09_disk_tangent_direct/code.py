@@ -168,7 +168,7 @@ def run_one_mesh(N):
         Q_exact[0, 0],
         Q_exact[0, 1]
     ])
-
+ 
     # ------------------------------------------------
     # Manufactured volume force
     # ------------------------------------------------
@@ -404,4 +404,4 @@ plt.tight_layout()
 plt.savefig(OUTDIR / f"disk_direct_solver_H1_error_vs_h_{anchoring_type}.png", dpi=300)
 plt.close()
 
-print("Done.")
+print("Done")
