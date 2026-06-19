@@ -14,7 +14,7 @@ from firedrake.output import VTKFile
 # ----------------------------------------------------
 # Choices
 # ----------------------------------------------------
-mesh_sizes = [16, 32, 64, 128]
+mesh_sizes = [16, 32]
 
 anchoring_type = "planar"
 # anchoring_type = "homeotropic"
