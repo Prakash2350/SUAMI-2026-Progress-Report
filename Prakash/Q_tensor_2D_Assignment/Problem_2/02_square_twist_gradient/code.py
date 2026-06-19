@@ -18,7 +18,7 @@ mesh_sizes = [16, 32, 64, 128]
 
 anchoring_type = "planar"
 # anchoring_type = "homeotropic"
-\
+
 OUTDIR = Path(__file__).resolve().parent
 
 
@@ -29,10 +29,10 @@ s0 = Constant(0.7)
 
 l1 = Constant(1.0)
 eta = Constant(0.1)
-d
-a2 = Constant(7.502104)
-a3 = Constant(60.975813)
-a4 = Constant(66.519069)
+
+a2 = Constant(7.5)
+a3 = Constant(60.98)
+a4 = Constant(66.52)
 
 omega = Constant(0.1)
 
