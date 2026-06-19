@@ -37,8 +37,8 @@ a4 = Constant(66.52)
 
 omega = Constant(0.1)
 
-tau = Constant(5.0e-4)
-max_iter = 3000
+tau = Constant(1.0e-4)
+max_iter = 10000
 tol = 1.0e-7
 
 if anchoring_type == "planar":
@@ -217,8 +217,8 @@ def run_one_mesh(N):
     # Use exact guess to avoid slow lagging.
     # ------------------------------------------------
     q.interpolate(as_vector([
-        0.05*(x - 0.5),
-        0.05*(y - 0.5)
+        0,
+        0
     ]))
 
     # ------------------------------------------------
@@ -307,6 +307,8 @@ def run_one_mesh(N):
     # Gradient descent loop
     # ------------------------------------------------
     energies = []
+    energy = compute_energy()
+    energies.append([0, energy])
 
     for k in range(max_iter):
 
@@ -316,9 +318,8 @@ def run_one_mesh(N):
 
         q.assign(q_new)
 
-        if k % 10 == 0:
-            energy = compute_energy()
-            energies.append([k, energy])
+        energy = compute_energy()
+        energies.append([k+1, energy])
 
         if k % 100 == 0:
             Q_h = Q_tensor(q)
@@ -402,7 +403,7 @@ def run_one_mesh(N):
     Es = [row[1] for row in energies]
 
     plt.figure()
-    plt.plot(its, Es, "o-")
+    plt.plot(its, Es)
     plt.xlabel("iteration")
     plt.ylabel("energy")
     plt.title("Energy vs iteration")
