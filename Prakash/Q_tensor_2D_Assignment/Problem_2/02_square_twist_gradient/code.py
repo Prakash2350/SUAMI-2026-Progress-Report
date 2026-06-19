@@ -38,7 +38,7 @@ omega = Constant(0.1)
 
 eps_a = Constant(0.0)
 
-tau = Constant(1.0e-4)
+tau = Constant(1.0e-3)
 max_iter = 1000
 tol = 1.0e-5
 
