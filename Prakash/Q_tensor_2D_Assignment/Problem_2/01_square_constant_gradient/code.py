@@ -145,9 +145,31 @@ def run_one_mesh(N):
     forcing = -0.5 * eps_a * E_tensor
 
     # ------------------------------------------------
-    # Initial condition: Q = 0
+    # Initial director field n0
+    # Problem 1: n0 = (1, 0)
     # ------------------------------------------------
-    q.interpolate(as_vector([0.0, 0.0]))
+    n0 = as_vector([1.0, 0.0])
+
+    n0_length = sqrt(n0[0]**2 + n0[1]**2)
+
+    nx = n0[0] / n0_length
+    ny = n0[1] / n0_length
+
+    Q0 = s0 * (
+        as_matrix([
+            [nx*nx, nx*ny],
+            [nx*ny, ny*ny]
+        ])
+        - I/2
+    )
+
+    q0 = as_vector([
+        Q0[0, 0],
+        Q0[0, 1]
+    ])
+
+    q.interpolate(q0)
+    
 
     # ------------------------------------------------
     # Boundary target for homeotropic anchoring
